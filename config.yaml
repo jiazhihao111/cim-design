@@ -1,0 +1,84 @@
+# 纯软件模拟存算一体拓扑流形架构 全局配置
+# 严格遵循 "无硬编码" 原则，所有可调参数集中于此
+
+system:
+  seed: 42
+  device: "cuda"          # 使用GPU验证存算一体效果
+  dtype: "float32"
+
+# ==========================================
+# L1 微观存算融合引擎 (SRAM级)
+# ==========================================
+l1_fusion:
+  sram_capacity: 1048576       # 模拟SRAM容量 (元素数) - 增加到1MB，可容纳约292个Qwen token
+  block_size: 512             # 分块大小 B
+  seq_length: 2048            # 序列长度 N
+  d_model: 3584               # 特征维度 d - 匹配Qwen模型
+  entropy_threshold_high: 0.7 # 高熵锚点阈值 (>=此值为核心锚点)
+  entropy_threshold_low: 0.3  # 低熵锚点阈值 (<=此值为长尾)
+  async_prefetch_window: 256  # 异步预取窗口大小
+  flash_attention_sim: true   # 是否启用FlashAttention分块模拟
+
+# ==========================================
+# L2 动态可塑性路由引擎 (MoE级)
+# ==========================================
+l2_router:
+  num_experts: 8              # 专家数量
+  top_k: 2                    # 激活专家数
+  d_model: 128                # 特征维度
+  plasticity_lr: 5.0e-4       # TTT在线学习率
+  weight_clip: 0.15           # 可塑性裁剪范围
+  ewc_lambda: 5.0e-1          # 弹性权重巩固强度 (Fisher正则，强化制动)
+  ema_momentum: 0.9           # 滑动窗口动量
+  use_ewc: true               # 是否启用EWC
+  use_ema: true               # 是否启用EMA
+
+# ==========================================
+# L3 连续时间弛豫引擎 (ODE/DEQ级)
+# ==========================================
+l3_relaxation:
+  ssm_state_dim: 64           # SSM状态维度
+  dt: 0.1                     # 离散化步长
+  deq_max_iter: 100            # DEQ最大迭代步数（增加以获得更多收敛机会）
+  deq_tol: 1.0e-4             # DEQ收敛容差
+  spectral_radius_threshold: 0.90  # 谱半径临界值 rho_c（降低以更早触发谱归一化）
+  spectral_norm_gamma: 0.85   # 谱归一化收缩系数（增强收缩力度）
+  circuit_breaker_max_iter: 30 # 断路器触发阈值
+  use_spectral_norm: true     # 是否启用动态谱归一化
+  use_circuit_breaker: true   # 是否启用断路器
+
+# ==========================================
+# 连续-离散相变采样器
+# ==========================================
+phase_sampler:
+  vocab_size: 100             # 离散Token词汇表大小
+  temperature: 0.5            # 玻尔兹曼温度（降低随机性）
+  sde_noise_scale: 0.8        # SDE破缺噪声强度（强化破缺效应）
+  gumbel_tau: 0.3             # Gumbel-Softmax温度
+  use_sde: true               # 是否启用SDE噪声
+
+# ==========================================
+# 拓扑网络
+# ==========================================
+topology:
+  num_nodes: 64               # 拓扑节点数
+  k_nearest: 4                # 小世界网络最近邻数
+  rewire_prob: 0.2            # 重连概率
+
+# ==========================================
+# 跨尺度反馈
+# ==========================================
+feedback:
+  macro_to_micro_scale: 0.1   # 宏观到微观反馈强度
+  macro_to_meso_scale: 0.2    # 宏观到中观反馈强度
+  meso_to_micro_scale: 0.15   # 中观到微观反馈强度
+  l3_to_l1_feedback: true     # L3→L1逆向反馈开关
+
+# ==========================================
+# 验证实验参数
+# ==========================================
+verify:
+  emergence_trials: 100       # 涌现实验重复次数
+  convergence_trials: 50      # 收敛实验重复次数
+  io_compare_seq_lens: [512, 1024, 2048, 4096]  # IO对比序列长度
+  plasticity_steps: 20        # 可塑性测试步数
